@@ -2,7 +2,7 @@ import os
 import pytest
 import requests
 from jsonschema import validate
-import os, subprocess, time, socket, sys
+import subprocess, time, socket, sys
 
 # Basic config for tests
 MODEL_BASE_URL = os.getenv("MODEL_URL", "http://localhost:8000")
