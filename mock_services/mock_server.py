@@ -32,9 +32,11 @@ class InferenceResponse(BaseModel):
     explanations: List[Explanation] = []
     warnings: List[str] = []
     model_version: str = "mock-fastapi-1.0"
-
-    class Config:
-        allow_population_by_field_name = True
+    # pydantic v2 configuration
+    model_config = {
+        "populate_by_name": True,
+        "protected_namespaces": (),
+    }
 
 # ---------- App ----------
 app = FastAPI(title="Mock Model API", version="1.0.0")
@@ -42,6 +44,16 @@ app = FastAPI(title="Mock Model API", version="1.0.0")
 @app.post("/v1/model/infer", response_model=InferenceResponse)
 def infer(req: InferenceRequest):
     text = (req.chief_complaint or "").lower()
+    # Prefer domain-hint based routing early (out-of-distribution)
+    if req.domain_hint and "pediatric" in (req.domain_hint or "").lower():
+        return InferenceResponse(
+            **{
+                "class": "needs_review",
+                "confidence": 0.4,
+                "explanations": [{"feature": "domain_mismatch", "weight": 0.1}],
+                "warnings": ["out-of-distribution: unsupported domain", "needs review"],
+            }
+        )
 
     if "crushing chest pain" in text:
         return InferenceResponse(
@@ -52,8 +64,8 @@ def infer(req: InferenceRequest):
                 "warnings": ["urgent escalation"],
             }
         )
-
-    if "chest" in text or "exertion" in text:
+    # Match broader exertion variants (exert, exertion, exertional) and chest keywords
+    if "chest" in text or "exert" in text:
         return InferenceResponse(
             **{
                 "class": "elevated_risk",
@@ -63,15 +75,7 @@ def infer(req: InferenceRequest):
             }
         )
 
-    if req.domain_hint and "pediatric" in req.domain_hint.lower():
-        return InferenceResponse(
-            **{
-                "class": "needs_review",
-                "confidence": 0.4,
-                "explanations": [{"feature": "domain_mismatch", "weight": 0.1}],
-                "warnings": ["out-of-distribution: unsupported domain", "needs review"],
-            }
-        )
+    # (domain hint already handled earlier)
 
     return InferenceResponse(
         **{

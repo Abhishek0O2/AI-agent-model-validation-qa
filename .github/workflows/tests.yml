@@ -3,6 +3,8 @@ on: [push, pull_request]
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    env:
+      PYTHONUTF8: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,7 +21,15 @@ jobs:
           python -m uvicorn mock_server:app --app-dir mock_services --host 0.0.0.0 --port 8000 &
           # Wait for the server to start
           sleep 2
-          # Run the tests with mock server enabled
-          USE_MOCK=1 pytest -m "p0 or p1" -v
+          # Run the tests with mock server enabled, produce JUnit XML and pytest-html
+          mkdir -p reports
+          USE_MOCK=1 pytest -m "p0 or p1" -v --junitxml=reports/junit.xml --html=reports/pytest_report.html --self-contained-html || true
+          # Generate an enhanced regression report
+          python scripts/generate_regression_report.py --junit reports/junit.xml --pytest-html reports/pytest_report.html --out reports/regression_report.html || true
           # Cleanup: kill the background server process
-          pkill -f "uvicorn mock_server:app"
+          pkill -f "uvicorn mock_server:app" || true
+      - name: Upload reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: reports

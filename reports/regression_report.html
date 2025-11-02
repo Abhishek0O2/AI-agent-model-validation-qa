@@ -1,0 +1,21 @@
+<html><head><meta charset="utf-8"><title>Regression Report</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}h1{color:#222}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px}th{background:#f4f4f4}</style>
+</head><body>
+<h1>Regression Test Report</h1>
+<p><strong>Total tests:</strong> 23 &nbsp; <strong>Passed:</strong> 23 &nbsp; <strong>Failures:</strong> 0 &nbsp; <strong>Errors:</strong> 0 &nbsp; <strong>Skipped:</strong> 0</p>
+<p><strong>JUnit XML:</strong> reports/junit.xml</p>
+<p><strong>PyTest HTML:</strong> reports/pytest_report.html</p>
+<h2>Defect summary</h2>
+<p>No failing tests detected.</p>
+<h2>Recommendations for regression testing</h2>
+<ul>
+<li>All tests passed — baseline looks healthy. Recommend promoting this run as a regression baseline and gating merges on P0 tests.</li>
+<li>Keep the generated HTML and JUnit artifacts attached to the CI run for traceability.</li>
+</ul>
+<h3>Suggested next steps</h3>
+<ol>
+<li>Attach the full pytest HTML and JUnit XML to the bug tickets.</li>
+<li>If failures are environment-dependent, capture environment details and re-run with `-k <testname>` locally to reproduce.</li>
+<li>Prioritize fixing P0 tests; add regression tests for any resolved defects.</li>
+</ol>
+</body></html>

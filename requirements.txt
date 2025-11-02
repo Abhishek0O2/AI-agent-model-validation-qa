@@ -5,6 +5,9 @@ fastapi==0.115.5
 uvicorn==0.32.0
 pydantic==2.9.2
 
+# HTML test reports
+pytest-html==3.2.0
+
 pytest==8.3.3
 requests==2.32.3
 jsonschema==4.23.0
