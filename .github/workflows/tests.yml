@@ -1,0 +1,25 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+      - name: Start mock server and run tests
+        run: |
+          . .venv/bin/activate
+          # Start the mock server in the background
+          python -m uvicorn mock_server:app --app-dir mock_services --host 0.0.0.0 --port 8000 &
+          # Wait for the server to start
+          sleep 2
+          # Run the tests with mock server enabled
+          USE_MOCK=1 pytest -m "p0 or p1" -v
+          # Cleanup: kill the background server process
+          pkill -f "uvicorn mock_server:app"
