@@ -2,10 +2,22 @@ import json
 import pytest
 
 # ---------- P0: accurate, safety-critical interpretations ----------
+# These tests validate the model's ability to correctly identify and
+# handle high-risk medical situations with appropriate urgency.
 
 @pytest.mark.p0
 def test_adverse_phrase_triggers_urgent(session, cfg):
-    """Adverse wording should escalate with high confidence and clear warning."""
+    """Tests model's ability to identify and escalate severe symptoms.
+    
+    Steps:
+    1. Submit a case with clear high-risk indicators (crushing chest pain + sweating)
+    2. Verify appropriate urgent/elevated classification
+    3. Check for high confidence score (>=0.9)
+    4. Validate presence of urgency-related warnings
+    
+    This is a critical safety test ensuring the model properly identifies
+    and escalates potential acute cardiac events requiring immediate attention.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {
         "patient_id": "pt-A1",
@@ -22,7 +34,18 @@ def test_adverse_phrase_triggers_urgent(session, cfg):
 
 @pytest.mark.p0
 def test_exertional_chest_symptoms_elevate_risk(session, cfg):
-    """Nuanced exertional description → elevated_risk with solid confidence."""
+    """Tests model's detection of exertional cardiac symptoms.
+    
+    Steps:
+    1. Submit case with typical angina presentation (exertional symptoms)
+    2. Verify appropriate risk elevation classification
+    3. Confirm confidence level meets threshold (>=0.75)
+    4. Validate that explanations reference relevant clinical features
+    
+    This test ensures the model correctly identifies classic angina patterns
+    and provides appropriate risk stratification for cardiac symptoms that
+    worsen with physical activity.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {
         "patient_id": "pt-A2",
@@ -40,7 +63,18 @@ def test_exertional_chest_symptoms_elevate_risk(session, cfg):
 
 @pytest.mark.p0
 def test_out_of_distribution_domain_flagged(session, cfg):
-    """Adult cardiology model given pediatric oncology hint → needs review with OOD warning."""
+    """Tests model's ability to recognize and flag out-of-scope cases.
+    
+    Steps:
+    1. Submit pediatric oncology case to adult cardiology model
+    2. Verify case is marked for review rather than misclassified
+    3. Check confidence is appropriately low (<=0.5)
+    4. Validate presence of out-of-distribution warnings
+    
+    This safety test ensures the model recognizes when cases fall outside
+    its training domain and appropriately flags them for human review
+    rather than making potentially unsafe predictions.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {
         "patient_id": "pt-A3",
@@ -60,7 +94,18 @@ def test_out_of_distribution_domain_flagged(session, cfg):
 
 @pytest.mark.p1
 def test_codeswitching_hinglish_understood(session, cfg):
-    """Code-switching (Hinglish) + medical keywords still interpreted correctly."""
+    """Tests model's ability to handle multilingual input (Hinglish).
+    
+    Steps:
+    1. Submit complaint in mixed Hindi-English (Hinglish)
+    2. Verify model can extract meaning despite language mixing
+    3. Check classification is appropriate for symptoms
+    4. Validate confidence score is within valid range
+    
+    This test ensures the model can handle real-world language patterns
+    where patients mix English medical terms with their primary language,
+    ensuring accurate interpretation regardless of linguistic variation.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {
         "patient_id": "pt-B1",
@@ -80,6 +125,21 @@ def test_codeswitching_hinglish_understood(session, cfg):
     "CHEST discomfort… esp. on stairs!!! 😖",  # casing + punctuation + emoji
 ])
 def test_synonyms_typos_noise_still_work(session, cfg, text):
+    """Tests model's robustness to various text irregularities.
+    
+    Steps:
+    1. Test multiple variants of symptom descriptions with:
+       - Common synonyms for symptoms
+       - Typical spelling mistakes
+       - Various text formats (case, punctuation, emojis)
+    2. Verify model successfully processes each variant
+    3. Validate classifications remain clinically appropriate
+    4. Confirm confidence scores are provided
+    
+    This test ensures the model is robust to common real-world variations
+    in how symptoms might be described, including typos, informal language,
+    and modern text elements like emojis.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {"patient_id": "pt-B2", "chief_complaint": text, "age": 54, "sex": "male"}
     r = session.post(url, json=payload, timeout=cfg["timeout"])
@@ -90,7 +150,22 @@ def test_synonyms_typos_noise_still_work(session, cfg, text):
 
 @pytest.mark.p1
 def test_long_narrative_does_not_crash(session, cfg):
-    """Very long narrative should be accepted or gracefully handled."""
+    """Tests model's handling of extremely long input texts.
+    
+    Steps:
+    1. Construct a very long narrative (>4000 words)
+    2. Include relevant symptoms within the long text
+    3. Submit request with extended timeout
+    4. Verify either:
+       - Successful processing (200)
+       - Proper length limit rejection (413)
+       - Valid format error (422)
+    5. For successful responses, verify required fields
+    
+    This test ensures the model either properly processes or gracefully
+    handles extremely verbose patient descriptions without crashing or
+    timing out inappropriately.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     long_text = ("Some context " * 2000) + " chest heaviness on exertion " + ("more text " * 2000)
     payload = {"patient_id": "pt-B3", "chief_complaint": long_text, "age": 60, "sex": "male"}
@@ -101,10 +176,25 @@ def test_long_narrative_does_not_crash(session, cfg):
         assert "class" in b and "confidence" in b
 
 # ---------- P1: variations in data formats ----------
+# These tests validate the model's ability to handle different
+# data formats and variations in how information is presented.
 
 @pytest.mark.p1
 def test_units_and_numeric_variations(session, cfg):
-    """Units/number variants present alongside text; service should not choke."""
+    """Tests model's handling of mixed units and numeric formats.
+    
+    Steps:
+    1. Create payload with multiple vital measurements
+    2. Include both metric (vitals) and imperial (text) units
+    3. Add standardized and free-text measurements
+    4. Include ISO-formatted dates
+    5. Verify successful processing
+    6. Validate appropriate risk classification
+    
+    This test ensures the model can handle real-world complexity where
+    measurements may be provided in different units and formats within
+    the same request.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {
         "patient_id": "pt-C1",
@@ -121,7 +211,22 @@ def test_units_and_numeric_variations(session, cfg):
 @pytest.mark.p1
 @pytest.mark.parametrize("onset", ["01/02/2025", "2025/02/01", "Feb 1, 2025", "3 days ago"])
 def test_date_format_variations(session, cfg, onset):
-    """Different date expressions should not break inference; ambiguity may lower confidence."""
+    """Tests model's handling of various date format inputs.
+    
+    Steps:
+    1. Test multiple date format variations:
+       - US format (MM/DD/YYYY)
+       - ISO-like format (YYYY/MM/DD)
+       - Natural language (Month D, YYYY)
+       - Relative dates ("3 days ago")
+    2. Verify model either:
+       - Successfully processes the date (200)
+       - Properly rejects invalid formats (422)
+    3. For successful cases, confirm classification
+    
+    This test ensures the model can handle various ways users might
+    express dates, while maintaining appropriate validation.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {
         "patient_id": "pt-C2",
@@ -137,7 +242,23 @@ def test_date_format_variations(session, cfg, onset):
 @pytest.mark.p1
 @pytest.mark.parametrize("sex_value", ["female", "F", "f", "prefer not to say", "nonbinary", None])
 def test_categorical_boolean_variants(session, cfg, sex_value):
-    """Category fuzzing: different representations of sex/gender should not error."""
+    """Tests model's handling of diverse gender/sex representations.
+    
+    Steps:
+    1. Test various sex/gender inputs:
+       - Standard values (female/male)
+       - Abbreviations (F/M)
+       - Case variations (f/m)
+       - Non-binary options
+       - Privacy preferences
+       - Missing values (None)
+    2. Verify successful processing
+    3. Confirm valid classification returned
+    
+    This test ensures the model handles gender/sex data inclusively
+    and gracefully, respecting diverse gender expressions while
+    maintaining clinical functionality.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {
         "patient_id": "pt-C3",
@@ -149,10 +270,23 @@ def test_categorical_boolean_variants(session, cfg, sex_value):
     assert "class" in r.json()
 
 # ---------- P1/P2: low-signal & validation clarity ----------
+# These tests verify the model's behavior with unclear or invalid inputs,
+# ensuring appropriate handling and clear error messaging.
 
 @pytest.mark.p1
 def test_low_signal_prompts_review(session, cfg):
-    """Vague/conflicting input -> low confidence + 'needs review' warning."""
+    """Tests model's handling of vague or ambiguous inputs.
+    
+    Steps:
+    1. Submit case with vague, non-specific symptoms
+    2. Verify appropriate 'needs review' classification
+    3. Confirm low confidence score (<=0.5)
+    4. Validate presence of appropriate warning flags
+    
+    This test ensures the model appropriately identifies cases where
+    the input information is too vague or conflicting for confident
+    automated assessment.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload = {"patient_id": "pt-D1", "age": 40, "sex": "male", "chief_complaint": "sometimes fine sometimes dizzy idk"}
     r = session.post(url, json=payload, timeout=cfg["timeout"])
@@ -165,7 +299,18 @@ def test_low_signal_prompts_review(session, cfg):
 
 @pytest.mark.p2
 def test_invalid_type_rejected_with_422(session, cfg):
-    """Bad types (e.g., age as string) should get a precise 422 from Pydantic/FastAPI."""
+    """Tests proper validation errors for incorrect data types.
+    
+    Steps:
+    1. Create payload with invalid data type (string for age)
+    2. Submit request with explicit JSON content type
+    3. Verify 422 Unprocessable Entity response
+    4. Confirm error message identifies problematic field
+    
+    This test ensures the API provides clear, actionable error
+    messages when clients submit data with incorrect types,
+    facilitating easier debugging and integration.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     bad_payload = {
         "patient_id": "pt-D2",
@@ -178,10 +323,25 @@ def test_invalid_type_rejected_with_422(session, cfg):
     assert "age" in r.text.lower()
 
 # ---------- P1: accuracy near decision signals ----------
+# These tests verify that the model's confidence scores appropriately
+# reflect the strength and clarity of clinical indicators.
 
 @pytest.mark.p1
 def test_confidence_gradient_stronger_phrase_gives_higher_confidence(session, cfg):
-    """Sanity: 'crushing chest pain' should score higher than generic 'chest on exertion'."""
+    """Tests model's confidence scaling with symptom severity.
+    
+    Steps:
+    1. Submit two cases:
+       - High severity: "crushing chest pain"
+       - Lower severity: "chest discomfort on exertion"
+    2. Use same age to control for demographics
+    3. Compare confidence scores between cases
+    4. Verify stronger symptoms yield higher confidence
+    
+    This test ensures the model's confidence scoring properly
+    reflects the clinical significance and urgency of different
+    symptom presentations.
+    """
     url = f"{cfg['base']}{cfg['path']}"
     payload1 = {"patient_id": "pt-E1", "chief_complaint": "Crushing chest pain right now", "age": 60}
     payload2 = {"patient_id": "pt-E2", "chief_complaint": "Chest discomfort on exertion", "age": 60}

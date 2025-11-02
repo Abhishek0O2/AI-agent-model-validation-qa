@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from utils import assert_min_response
+from conftest import assert_min_response
 
 @pytest.mark.p0
 def test_tc_m01_happy_path_schema(session, cfg):
