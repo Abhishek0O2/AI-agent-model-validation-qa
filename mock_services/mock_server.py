@@ -1,5 +1,6 @@
 from typing import List, Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 # ---------- Schemas ----------
@@ -85,3 +86,31 @@ def infer(req: InferenceRequest):
             "warnings": ["low confidence—needs review"],
         }
     )
+
+
+@app.post("/v1/upload_chart")
+async def upload_chart(
+    file: UploadFile = File(...),
+    page_count: int | None = Form(None),
+):
+    """Simple mock upload endpoint to support UI/API tests.
+
+    - Only accepts PDF files (by extension).
+    - Rejects files with page_count > 100.
+    Returns JSON with an 'error' key on validation failures to match tests.
+    """
+    filename = (file.filename or "").lower().strip()
+
+    if not filename.endswith(".pdf"):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Unsupported file format: only PDF allowed"},
+        )
+
+    if page_count is not None and page_count > 100:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "Too many pages: maximum allowed is 100"},
+        )
+
+    return {"status": "ok", "filename": filename, "page_count": page_count}

@@ -33,10 +33,25 @@ def test_schema_minimum_and_model_version(session, cfg):
     
     # Parse and validate response
     b = r.json()
-    assert "class" in b and "confidence" in b and "explanations" in b and "warnings" in b
-    assert isinstance(b["explanations"], list) and isinstance(b["warnings"], list)
-    assert 0.0 <= b["confidence"] <= 1.0
-    assert "model_version" in b and b["model_version"]
+    
+    # Assert all required fields are present
+    assert "class" in b, "Response missing required 'class' field"
+    assert "confidence" in b, "Response missing required 'confidence' field"
+    assert "explanations" in b, "Response missing required 'explanations' field"
+    assert "warnings" in b, "Response missing required 'warnings' field"
+    assert "model_version" in b, "Response missing required 'model_version' field"
+    
+    # Validate data types
+    assert isinstance(b["explanations"], list), f"explanations should be a list, got {type(b['explanations'])}"
+    assert isinstance(b["warnings"], list), f"warnings should be a list, got {type(b['warnings'])}"
+    assert isinstance(b["confidence"], (int, float)), f"confidence should be numeric, got {type(b['confidence'])}"
+    
+    # Validate confidence range
+    assert 0.0 <= b["confidence"] <= 1.0, f"confidence {b['confidence']} is outside valid range [0,1]"
+    
+    # Validate model version is non-empty
+    assert b["model_version"], "model_version should not be empty"
+    assert isinstance(b["model_version"], str), f"model_version should be string, got {type(b['model_version'])}"
 
 @pytest.mark.p1
 def test_no_phi_echo_name_phone(session, cfg):
@@ -64,13 +79,27 @@ def test_no_phi_echo_name_phone(session, cfg):
     
     # Make API request
     r = session.post(url, json=payload, timeout=cfg["timeout"])
-    assert r.status_code == 200
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}"
+    
+    # Parse response
+    response = r.json()
     
     # Check response doesn't contain name or phone number
-    dump = json.dumps(r.json(), ensure_ascii=False).lower()
-    assert name.lower().split()[0] not in dump  # first name
-    assert name.lower().split()[1] not in dump  # last name
-    assert phone not in dump  # phone digits
+    dump = json.dumps(response, ensure_ascii=False).lower()
+    
+    # Verify no part of the name appears
+    first_name = name.lower().split()[0]
+    last_name = name.lower().split()[1]
+    assert first_name not in dump, f"First name '{first_name}' found in response, PHI leak detected"
+    assert last_name not in dump, f"Last name '{last_name}' found in response, PHI leak detected"
+    
+    # Verify phone number doesn't appear (check full number and partial sequences)
+    assert phone not in dump, f"Phone number '{phone}' found in response, PHI leak detected"
+    assert phone[:5] not in dump, f"Partial phone number found in response, PHI leak detected"
+    
+    # Ensure response still contains valid fields (not completely empty)
+    assert "class" in response, "Response missing 'class' field"
+    assert "confidence" in response, "Response missing 'confidence' field"
 
 
 @pytest.mark.p0
@@ -96,11 +125,18 @@ def test_label_whitelist(session, cfg):
     
     # Make API request
     r = session.post(url, json=payload, timeout=cfg["timeout"])
-    assert r.status_code == 200
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}"
     
     # Verify classification is allowed
-    cls = r.json()["class"]
-    assert cls in LABEL_WHITELIST
+    response = r.json()
+    cls = response.get("class")
+    assert cls is not None or cls in LABEL_WHITELIST, f"Response missing 'class' field"
+    assert cls in LABEL_WHITELIST, f"Invalid class '{cls}' not in whitelist {LABEL_WHITELIST}"
+    
+    # Ensure confidence exists for valid classifications
+    if cls is not None:
+        assert "confidence" in response, "Response missing 'confidence' field"
+        assert 0.0 <= response["confidence"] <= 1.0, f"confidence {response['confidence']} out of range"
 
 @pytest.mark.p1
 def test_explanations_must_be_present_on_200(session, cfg):
@@ -126,12 +162,23 @@ def test_explanations_must_be_present_on_200(session, cfg):
     
     # Make API request
     r = session.post(url, json=payload, timeout=cfg["timeout"])
-    assert r.status_code == 200
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}"
     
     # Validate explanations
-    expl = r.json().get("explanations", [])
-    assert isinstance(expl, list) and len(expl) > 0
-    assert "feature" in expl[0]  # minimal relevance check
+    response = r.json()
+    expl = response.get("explanations", [])
+    
+    assert isinstance(expl, list), f"explanations should be a list, got {type(expl)}"
+    assert len(expl) > 0, "explanations list is empty, at least one explanation required"
+    
+    # Check structure of first explanation
+    assert "feature" in expl[0], "Explanation missing required 'feature' field"
+    assert isinstance(expl[0]["feature"], str), f"feature should be string, got {type(expl[0]['feature'])}"
+    assert len(expl[0]["feature"]) > 0, "feature field should not be empty"
+    
+    # Optionally check for weight if present
+    if "weight" in expl[0]:
+        assert isinstance(expl[0]["weight"], (int, float)), f"weight should be numeric, got {type(expl[0]['weight'])}"
 
 @pytest.mark.p1
 def test_input_validation_bad_type_422(session, cfg):
@@ -157,8 +204,21 @@ def test_input_validation_bad_type_422(session, cfg):
     r = session.post(url, data=json.dumps(bad), headers={"Content-Type": "application/json"}, timeout=cfg["timeout"])
     
     # Verify proper error response
-    assert r.status_code == 422
-    assert "age" in r.text.lower()  # should mention the problematic field
+    assert r.status_code == 422, f"Expected 422 for invalid type, got {r.status_code}"
+    
+    # Check error body is valid JSON
+    try:
+        error_body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {"detail": r.text}
+    except json.JSONDecodeError:
+        error_body = {"detail": r.text}
+    
+    # Error should mention the problematic field
+    error_text = r.text.lower()
+    assert "age" in error_text, f"Error message should mention 'age' field, got: {r.text[:200]}"
+    
+    # Additional validation: check for common error patterns
+    assert any(keyword in error_text for keyword in ["validation", "type", "invalid", "error"]), \
+        f"Error message should indicate validation/type error, got: {r.text[:200]}"
 
 @pytest.mark.p1
 def test_response_does_not_echo_full_input_text(session, cfg):
@@ -185,8 +245,23 @@ def test_response_does_not_echo_full_input_text(session, cfg):
     
     # Make API request
     r = session.post(url, json=payload, timeout=cfg["timeout"])
-    assert r.status_code == 200
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}"
     
     # Check response doesn't contain raw complaint text
-    dump = json.dumps(r.json(), ensure_ascii=False).lower()
-    assert complaint.lower() not in dump  # response should not mirror raw complaint text
+    response = r.json()
+    dump = json.dumps(response, ensure_ascii=False).lower()
+    complaint_lower = complaint.lower()
+    
+    assert complaint_lower not in dump, f"Response contains full complaint text, PHI leak risk"
+    
+    # Check for significant substrings (>5 chars) from complaint
+    words = [w for w in complaint.split() if len(w) > 5]
+    leaked_words = [w for w in words if w.lower() in dump]
+    
+    # Allow some common medical terms but flag if too many specific words appear
+    if len(leaked_words) > len(words) * 0.5:  # More than 50% of significant words
+        pytest.fail(f"Too many complaint words found in response: {leaked_words}")
+    
+    # Ensure valid response structure maintained
+    assert "class" in response, "Response missing 'class' field"
+    assert "confidence" in response, "Response missing 'confidence' field"

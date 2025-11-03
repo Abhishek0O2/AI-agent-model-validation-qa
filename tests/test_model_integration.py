@@ -37,6 +37,25 @@ def test_tc_m01_happy_path_schema(session, cfg):
             "python -m uvicorn mock_server:app --app-dir mock_services --host 0.0.0.0 --port 8000\n"
             f"Error: {str(e)}"
         )
-    body=r.json()
-    # Schema checks
+    
+    body = r.json()
+    
+    # Schema checks using helper function
     assert_min_response(body)
+    
+    # Additional validation for happy path
+    assert "class" in body, "Response missing 'class' field"
+    assert body["class"] in ("urgent", "elevated_risk", "needs_review", None), \
+        f"Invalid classification: {body['class']}"
+    
+    # Verify confidence is reasonable for complete input
+    assert "confidence" in body, "Response missing 'confidence' field"
+    assert body["confidence"] > 0.0, "Confidence should be > 0 for valid input with vitals"
+    
+    # Verify explanations present for complete case
+    assert "explanations" in body and isinstance(body["explanations"], list), \
+        "Complete case should include explanations"
+    
+    # Verify model version
+    assert "model_version" in body and body["model_version"], \
+        "Response should include non-empty model_version"
