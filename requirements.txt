@@ -21,3 +21,6 @@ python-docx==1.1.2
 # UI automation
 playwright==1.48.0
 
+# For FastAPI file upload endpoints (/v1/upload_chart)
+python-multipart==0.0.9
+
