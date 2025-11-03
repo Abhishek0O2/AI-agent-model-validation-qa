@@ -1,11 +1,14 @@
+import os
 import pytest
 import requests
 
 # This test simulates a user error scenario for uploading a medical chart
 # with an incorrect format and excessive page count, and checks the API/UI response.
 # Assumes an endpoint /v1/upload_chart exists for file uploads.
-
-API_URL = "http://127.0.0.1:8000/v1/upload_chart"
+# Use MODEL_URL when available (Docker Compose tests service sets this to http://mock-server:8000),
+# otherwise default to localhost for local runs.
+BASE_URL = os.getenv("MODEL_URL", "http://127.0.0.1:8000").rstrip("/")
+API_URL = f"{BASE_URL}/v1/upload_chart"
 
 @pytest.mark.p2
 def test_upload_medical_chart_incorrect_format():

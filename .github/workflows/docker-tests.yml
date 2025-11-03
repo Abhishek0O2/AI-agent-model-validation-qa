@@ -21,28 +21,28 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker images
-        run: docker-compose build
+        run: docker compose build
 
       - name: Start mock server
-        run: docker-compose up -d mock-server
+        run: docker compose up -d mock-server
 
       - name: Wait for mock server to be ready
         run: |
           echo "Waiting for mock server to start..."
           sleep 5
-          docker-compose logs mock-server
+          docker compose logs mock-server
 
       - name: Run tests in Docker
         run: |
           if [ -z "${{ github.event.inputs.test_marker }}" ]; then
-            docker-compose run --rm tests pytest -v --html=reports/pytest_report.html --self-contained-html
+            docker compose run --rm tests pytest -v --html=reports/pytest_report.html --self-contained-html
           else
-            docker-compose run --rm tests pytest -v -m ${{ github.event.inputs.test_marker }} --html=reports/pytest_report.html --self-contained-html
+            docker compose run --rm tests pytest -v -m ${{ github.event.inputs.test_marker }} --html=reports/pytest_report.html --self-contained-html
           fi
 
       - name: Display test logs
         if: always()
-        run: docker-compose logs tests
+        run: docker compose logs tests
 
       - name: Upload test reports
         if: always()
@@ -54,4 +54,4 @@ jobs:
 
       - name: Stop services
         if: always()
-        run: docker-compose down
+        run: docker compose down

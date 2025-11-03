@@ -1,0 +1,18 @@
+FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
+
+WORKDIR /app
+
+# Copy requirements and install Python dependencies (playwright already included)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy test code and configuration
+COPY conftest.py pytest.ini ./
+COPY tests/ ./tests/
+COPY scripts/ ./scripts/
+
+# Create reports directory
+RUN mkdir -p reports
+
+# Default command runs all tests (HTML report goes to mounted reports volume)
+CMD ["pytest", "-v", "--html=reports/pytest_report.html", "--self-contained-html"]
